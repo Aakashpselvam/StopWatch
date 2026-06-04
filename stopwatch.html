@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stopwatch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f11;
+      --surface: #1a1a1f;
+      --surface2: #222228;
+      --border: rgba(255,255,255,0.07);
+      --text: #f0f0f2;
+      --muted: #6b6b75;
+      --green: #4CAF50;
+      --orange: #FF9800;
+      --red: #F44336;
+      --blue: #2196F3;
+      --green-glow: rgba(76,175,80,0.18);
+      --orange-glow: rgba(255,152,0,0.18);
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -30%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(76,175,80,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      transition: background 0.6s;
+    }
+    body.paused::before { background: radial-gradient(circle, rgba(255,152,0,0.06) 0%, transparent 70%); }
+    body.idle::before { background: radial-gradient(circle, rgba(76,175,80,0.04) 0%, transparent 70%); }
+
+    .app {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 0 2rem;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-icon {
+      width: 36px; height: 36px;
+      background: var(--surface2);
+      border: 0.5px solid var(--border);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      color: var(--green);
+    }
+    .header-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .status-pill {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: var(--surface2);
+      color: var(--muted);
+      border: 0.5px solid var(--border);
+      transition: all 0.3s;
+    }
+    .status-pill.running { background: rgba(76,175,80,0.15); color: var(--green); border-color: rgba(76,175,80,0.3); }
+    .status-pill.paused { background: rgba(255,152,0,0.15); color: var(--orange); border-color: rgba(255,152,0,0.3); }
+
+    /* Timer Ring */
+    .timer-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem 0 2rem;
+      position: relative;
+    }
+    .ring-container {
+      position: relative;
+      width: 220px; height: 220px;
+      margin-bottom: 1.5rem;
+    }
+    .ring-svg {
+      position: absolute; inset: 0;
+      transform: rotate(-90deg);
+    }
+    .ring-track { fill: none; stroke: var(--surface2); stroke-width: 4; }
+    .ring-progress {
+      fill: none;
+      stroke: var(--green);
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-dasharray: 628;
+      stroke-dashoffset: 628;
+      transition: stroke 0.4s, stroke-dashoffset 0.1s linear;
+    }
+    .ring-progress.paused { stroke: var(--orange); }
+    .ring-inner {
+      position: absolute; inset: 12px;
+      background: var(--surface);
+      border-radius: 50%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 4px;
+      border: 0.5px solid var(--border);
+    }
+    .timer-label {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .timer-display {
+      font-family: 'DM Mono', monospace;
+      font-size: 38px;
+      font-weight: 300;
+      letter-spacing: 0.02em;
+      color: var(--text);
+      transition: color 0.3s;
+      line-height: 1;
+    }
+    .timer-display.running { color: var(--green); }
+    .timer-display.paused { color: var(--orange); }
+    .timer-ms {
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    /* Buttons */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .btn-single { margin-bottom: 1.5rem; display: flex; gap: 10px; }
+    .btn {
+      height: 44px;
+      border: 0.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      transition: all 0.15s;
+      letter-spacing: 0.01em;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn i { font-size: 16px; }
+
+    .btn-start {
+      background: rgba(76,175,80,0.12);
+      color: var(--green);
+      border-color: rgba(76,175,80,0.25);
+    }
+    .btn-start:hover:not(:disabled) { background: rgba(76,175,80,0.22); }
+
+    .btn-pause {
+      background: rgba(255,152,0,0.12);
+      color: var(--orange);
+      border-color: rgba(255,152,0,0.25);
+    }
+    .btn-pause:hover:not(:disabled) { background: rgba(255,152,0,0.22); }
+
+    .btn-reset {
+      flex: 1;
+      background: rgba(244,67,54,0.10);
+      color: var(--red);
+      border-color: rgba(244,67,54,0.22);
+    }
+    .btn-reset:hover:not(:disabled) { background: rgba(244,67,54,0.18); }
+
+    .btn-lap {
+      flex: 1;
+      background: rgba(33,150,243,0.10);
+      color: var(--blue);
+      border-color: rgba(33,150,243,0.22);
+    }
+    .btn-lap:hover:not(:disabled) { background: rgba(33,150,243,0.18); }
+
+    /* Lap Section */
+    .lap-section {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .lap-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .lap-heading {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .lap-badge {
+      font-size: 11px;
+      background: var(--surface2);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 2px 8px;
+      border: 0.5px solid var(--border);
+    }
+    .lap-list { max-height: 220px; overflow-y: auto; }
+    .lap-list::-webkit-scrollbar { width: 3px; }
+    .lap-list::-webkit-scrollbar-track { background: transparent; }
+    .lap-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .lap-item {
+      display: flex; align-items: center;
+      padding: 11px 16px;
+      border-bottom: 0.5px solid var(--border);
+      gap: 12px;
+      animation: slideIn 0.25s ease;
+    }
+    .lap-item:last-child { border-bottom: none; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+    .lap-num {
+      font-size: 11px; color: var(--muted);
+      min-width: 24px; font-weight: 500;
+    }
+    .lap-time {
+      font-family: 'DM Mono', monospace;
+      font-size: 14px; color: var(--text);
+      flex: 1;
+    }
+    .lap-split {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px; color: var(--muted);
+    }
+    .lap-tag {
+      font-size: 10px; font-weight: 500;
+      padding: 2px 7px; border-radius: 6px;
+      letter-spacing: 0.05em;
+    }
+    .lap-best { }
+    .lap-best .lap-time { color: var(--green); }
+    .lap-best .lap-tag { background: rgba(76,175,80,0.15); color: var(--green); }
+    .lap-worst .lap-time { color: var(--red); }
+    .lap-worst .lap-tag { background: rgba(244,67,54,0.12); color: var(--red); }
+
+    .empty-laps {
+      padding: 28px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .empty-laps i { display: block; font-size: 28px; margin-bottom: 8px; opacity: 0.4; }
+  </style>
+</head>
+<body class="idle">
+
+<div class="app">
+  <div class="header">
+    <div class="header-left">
+      <div class="header-icon"><i class="ti ti-clock" aria-hidden="true"></i></div>
+      <span class="header-title">Stopwatch</span>
+    </div>
+    <div class="status-pill" id="statusPill">Idle</div>
+  </div>
+
+  <div class="timer-wrap">
+    <div class="ring-container">
+      <svg class="ring-svg" viewBox="0 0 220 220" aria-hidden="true">
+        <circle class="ring-track" cx="110" cy="110" r="100"/>
+        <circle class="ring-progress" id="ringProgress" cx="110" cy="110" r="100"/>
+      </svg>
+      <div class="ring-inner">
+        <span class="timer-label">elapsed</span>
+        <span class="timer-display" id="timerDisplay">00:00</span>
+        <span class="timer-ms" id="timerMs">.00</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-grid">
+    <button class="btn btn-start" id="btnStart" onclick="startTimer()">
+      <i class="ti ti-player-play" aria-hidden="true"></i> Start
+    </button>
+    <button class="btn btn-pause" id="btnPause" onclick="pauseTimer()" disabled>
+      <i class="ti ti-player-pause" aria-hidden="true"></i> Pause
+    </button>
+  </div>
+  <div class="btn-single">
+    <button class="btn btn-reset" onclick="resetTimer()">
+      <i class="ti ti-refresh" aria-hidden="true"></i> Reset
+    </button>
+    <button class="btn btn-lap" id="btnLap" onclick="recordLap()" disabled>
+      <i class="ti ti-flag" aria-hidden="true"></i> Lap
+    </button>
+  </div>
+
+  <div class="lap-section">
+    <div class="lap-header">
+      <span class="lap-heading">Lap Times</span>
+      <span class="lap-badge" id="lapBadge">0 laps</span>
+    </div>
+    <div class="lap-list" id="lapList">
+      <div class="empty-laps">
+        <i class="ti ti-flag-off" aria-hidden="true"></i>
+        No laps recorded yet
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let startTime = 0, elapsed = 0, interval = null, state = 'idle';
+  let laps = [], lastLap = 0;
+  const CIRCUMFERENCE = 2 * Math.PI * 100;
+
+  function pad(n, d=2){ return String(n).padStart(d,'0'); }
+
+  function fmt(ms) {
+    const cs = Math.floor(ms / 10) % 100;
+    const s = Math.floor(ms / 1000) % 60;
+    const m = Math.floor(ms / 60000) % 60;
+    const h = Math.floor(ms / 3600000);
+    return { main: h > 0 ? pad(h)+':'+pad(m)+':'+pad(s) : pad(m)+':'+pad(s), cs: '.'+pad(cs) };
+  }
+
+  function tick() {
+    elapsed = Date.now() - startTime;
+    const f = fmt(elapsed);
+    document.getElementById('timerDisplay').textContent = f.main;
+    document.getElementById('timerMs').textContent = f.cs;
+    const prog = document.getElementById('ringProgress');
+    const cycle = 60000;
+    const offset = CIRCUMFERENCE - (CIRCUMFERENCE * (elapsed % cycle) / cycle);
+    prog.style.strokeDashoffset = offset;
+  }
+
+  function startTimer() {
+    startTime = Date.now() - elapsed;
+    interval = setInterval(tick, 16);
+    state = 'running';
+    updateUI();
+  }
+
+  function pauseTimer() {
+    clearInterval(interval);
+    state = 'paused';
+    updateUI();
+  }
+
+  function resetTimer() {
+    clearInterval(interval);
+    elapsed = 0; laps = []; lastLap = 0; state = 'idle';
+    document.getElementById('timerDisplay').textContent = '00:00';
+    document.getElementById('timerMs').textContent = '.00';
+    document.getElementById('ringProgress').style.strokeDashoffset = CIRCUMFERENCE;
+    renderLaps();
+    updateUI();
+  }
+
+  function recordLap() {
+    if (state !== 'running') return;
+    laps.push({ total: elapsed, split: elapsed - lastLap });
+    lastLap = elapsed;
+    renderLaps();
+    document.getElementById('lapBadge').textContent = laps.length + (laps.length===1?' lap':' laps');
+  }
+
+  function renderLaps() {
+    const list = document.getElementById('lapList');
+    document.getElementById('lapBadge').textContent = laps.length + (laps.length===1?' lap':' laps');
+    if (!laps.length) {
+      list.innerHTML = '<div class="empty-laps"><i class="ti ti-flag-off" aria-hidden="true"></i>No laps recorded yet</div>';
+      return;
+    }
+    const splits = laps.map(l => l.split);
+    const best = Math.min(...splits), worst = Math.max(...splits);
+    list.innerHTML = [...laps].reverse().map((l, ri) => {
+      const i = laps.length - ri;
+      const isBest = splits.length > 1 && l.split === best;
+      const isWorst = splits.length > 1 && l.split === worst;
+      const cls = isBest ? 'lap-best' : isWorst ? 'lap-worst' : '';
+      const tag = isBest ? '<span class="lap-tag">Best</span>' : isWorst ? '<span class="lap-tag">Worst</span>' : '';
+      return `<div class="lap-item ${cls}">
+        <span class="lap-num">#${i}</span>
+        <span class="lap-time">${fmt(l.total).main}${fmt(l.total).cs}</span>
+        <span class="lap-split">${fmt(l.split).main}${fmt(l.split).cs}</span>
+        ${tag}
+      </div>`;
+    }).join('');
+  }
+
+  function updateUI() {
+    const pill = document.getElementById('statusPill');
+    const disp = document.getElementById('timerDisplay');
+    const prog = document.getElementById('ringProgress');
+    const btnStart = document.getElementById('btnStart');
+    const btnPause = document.getElementById('btnPause');
+    const btnLap = document.getElementById('btnLap');
+
+    document.body.className = state;
+    disp.className = 'timer-display ' + (state !== 'idle' ? state : '');
+    prog.className = 'ring-progress' + (state === 'paused' ? ' paused' : '');
+
+    if (state === 'running') {
+      pill.textContent = 'Running'; pill.className = 'status-pill running';
+      btnStart.disabled = true; btnPause.disabled = false; btnLap.disabled = false;
+      btnStart.innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Start';
+    } else if (state === 'paused') {
+      pill.textContent = 'Paused'; pill.className = 'status-pill paused';
+      btnStart.disabled = false; btnPause.disabled = true; btnLap.disabled = true;
+      btnStart.innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Resume';
+    } else {
+      pill.textContent = 'Idle'; pill.className = 'status-pill';
+      btnStart.disabled = false; btnPause.disabled = true; btnLap.disabled = true;
+      btnStart.innerHTML = '<i class="ti ti-player-play" aria-hidden="true"></i> Start';
+    }
+  }
+</script>
+</body>
+</html>
